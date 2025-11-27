@@ -2,6 +2,8 @@ import logging
 import torch
 from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
+import json
+import json
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
 logger = logging.getLogger(__name__)
@@ -141,6 +143,30 @@ class Tokenizer:
                 continue
             words.append(token)
         return ' '.join(words)
+    
+    def save(self, filename):
+        # Convert integer keys in id_to_word to strings for JSON compatibility
+        id_to_word_str_keys = {str(k): v for k, v in self.id_to_word.items()}
+        output = {
+            'word_to_id': self.word_to_id,
+            'id_to_word': id_to_word_str_keys,
+            'lang': self.lang
+        }
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(output, f, ensure_ascii=False)
+
+    @classmethod
+    def load(cls, filename):
+        """Loads a tokenizer from a file."""
+        with open(filename, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        tokenizer = cls(lang=data['lang'])
+        tokenizer.word_to_id = data['word_to_id']
+        # JSON keys are always strings, convert id_to_word keys back to integers
+        tokenizer.id_to_word = {int(k): v for k, v in data['id_to_word'].items()}
+        tokenizer._next_id = len(tokenizer.word_to_id)
+        return tokenizer
 
     @property
     def vocab_size(self):
