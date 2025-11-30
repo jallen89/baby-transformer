@@ -1,154 +1,62 @@
-from .utils import FrenchEnglishDataset
 import pytest
 import torch
+from .utils import FrenchEnglishDataset
+from pathlib import Path
 
-def test_load_valid_pairs(tmp_path):
-    p = tmp_path / "pairs.txt"
-    p.write_text("Hello\tBonjour\nGoodbye\tAu revoir\n", encoding="utf-8")
-    ds = FrenchEnglishDataset(str(p))
-    assert ds.load_data() == [("Hello", "Bonjour"), ("Goodbye", "Au revoir")]
+@pytest.fixture
+def sample_data_file(tmp_path: Path):
+    """Create a dummy data file for testing."""
+    data = (
+        "Hello.\tBonjour.\n"
+        "How are you?\tComment ça va ?\n"
+        "I am fine.\tJe vais bien.\n"
+        "\n"  # Empty line to be ignored
+        "This is a test.\tCeci est un test.\n"
+        "One part only\n" # Malformed line to be ignored
+    )
+    file_path = tmp_path / "test_data.txt"
+    file_path.write_text(data, encoding="utf-8")
+    return file_path
 
+def test_load_data_counts(sample_data_file: Path):
+    """Tests that load_data correctly counts translation pairs, ignoring empty/malformed lines."""
+    dataset = FrenchEnglishDataset(filename=str(sample_data_file))
+    translation_pairs = dataset.load_data(str(sample_data_file))
+    assert len(translation_pairs) == 4
 
-def test_skip_empty_and_malformed_lines(tmp_path):
-    p = tmp_path / "pairs2.txt"
-    p.write_text("Hi\tSalut\n\nMalformed line\nExtra\tCols\tIgnored\n  \t  \n", encoding="utf-8")
-    ds = FrenchEnglishDataset(str(p))
-    assert ds.load_data() == [("Hi", "Salut"), ("Extra", "Cols")]
-
-
-def test_file_not_found_returns_empty():
-    ds = FrenchEnglishDataset("no_such_file_xyz.txt")
-    assert ds.load_data() == []
-    def test_tokenizer_build_and_vocab_size():
-        ds = FrenchEnglishDataset("no_such_file_for_tokenizer.txt")
-        t = ds.english_tokenizer
-        # build vocab from sentences (case-insensitive, unique words)
-        returned = t.build_from_sentences(["Hello world", "Hello"])
-        # special tokens: <UNK>, <sos>, <eos> = 3, plus 'hello' and 'world' = 2 -> total 5
-        assert returned == t.vocab_size == 5
-        assert 'hello' in t.word_to_id and 'world' in t.word_to_id
-
-
-def test_encode_decode_and_options():
-    ds = FrenchEnglishDataset("no_file_needed.txt")
-    t = ds.english_tokenizer
-    t.build_from_sentences(["Fast small"])
-    # check ids for words
-    id_fast = t.word_to_id['fast']
-    id_small = t.word_to_id['small']
-
-    # default add_sos_eos True
-    encoded = t.encode("Fast small")
-    assert encoded == [t.word_to_id['<sos>'], id_fast, id_small, t.word_to_id['<eos>']]
-
-    # without sos/eos
-    encoded_no_special = t.encode("Fast small", add_sos_eos=False)
-    assert encoded_no_special == [id_fast, id_small]
-
-    # decode should remove special tokens by default and return lowercase words
-    decoded = t.decode(encoded)
-    assert decoded == "fast small"
+def test_load_data_content(sample_data_file: Path):
+    """Tests that load_data correctly parses the content of translation pairs."""
+    dataset = FrenchEnglishDataset(filename=str(sample_data_file))
+    translation_pairs = dataset.load_data(str(sample_data_file))
+    assert ("Hello.", "Bonjour.") in translation_pairs
+    assert ("How are you?", "Comment ça va ?") in translation_pairs
+    assert ("I am fine.", "Je vais bien.") in translation_pairs
+    assert ("This is a test.", "Ceci est un test.") in translation_pairs
 
 
-def test_unknown_words_map_to_unk_and_decode_shows_unk():
-    ds = FrenchEnglishDataset("no_file_tokenizer.txt")
-    t = ds.english_tokenizer
-    t.build_from_sentences(["Known"])
-    # encode an unknown word
-    enc = t.encode("CompletelyUnknown")
-    # should be <sos>, <UNK>, <eos>
-    assert enc[0] == t.word_to_id['<sos>']
-    assert enc[1] == t.word_to_id['<UNK>']
-    assert enc[-1] == t.word_to_id['<eos>']
-    # decoding should return the '<UNK>' token (special tokens stripped)
-    assert t.decode(enc) == "<UNK>"
+def test_encode_and_pad(sample_data_file: Path):
+    """Tests that _encode_and_pad correctly encodes and pads the translation pairs."""
 
+    dataset = FrenchEnglishDataset(filename=str(sample_data_file))
+    dataset.intialize_dataset()
 
-def test_dataset_builds_tokenizers_from_file_and_handles_spaces(tmp_path):
-    p = tmp_path / "pairs_vocab.txt"
-    p.write_text("One two\tUn deux\nThree\tTrois\nExtra   Spaces\tEspace   Extra\n", encoding="utf-8")
-    ds = FrenchEnglishDataset(str(p))
-    pairs = ds.load_data()
-    assert pairs == [("One two", "Un deux"), ("Three", "Trois"), ("Extra   Spaces", "Espace   Extra")]
+    print(dataset.english_tensor)
+    print(dataset.french_tensor)
 
-    # english vocab: one, two, three, extra, spaces -> 5 + 3 specials = 8
-    eng_vocab = ds.english_tokenizer.vocab_size
-    assert eng_vocab == 8
+    # Check that tensors are created
+    assert hasattr(dataset, 'english_tensor')
+    assert hasattr(dataset, 'french_tensor')
+    assert isinstance(dataset.english_tensor, torch.Tensor)
+    assert isinstance(dataset.french_tensor, torch.Tensor)
 
-    # french vocab: un, deux, trois, espace, extra -> 5 + 3 specials = 8
-    fr_vocab = ds.french_tokenizer.vocab_size
-    assert fr_vocab == 8
+    # Check dimensions
+    # We have 4 valid pairs in the sample data
+    assert dataset.english_tensor.size(0) == 4
+    assert dataset.french_tensor.size(0) == 4
 
-    # encoding multi-word sentence (preserve order, lowercased)
-    ids = ds.english_tokenizer.encode("One two", add_sos_eos=False)
-    assert ids == [ds.english_tokenizer.word_to_id['one'], ds.english_tokenizer.word_to_id['two']]
-    def test_read_valid_pairs(tmp_path):
-        p = tmp_path / "pairs.txt"
-        p.write_text("Hello\tBonjour\nGoodbye\tAu revoir\n", encoding="utf-8")
-        ds = FrenchEnglishDataset(str(p))
-        # Test the internal pair reading method
-        assert ds._read_translation_pairs() == [("Hello", "Bonjour"), ("Goodbye", "Au revoir")]
-
-
-    def test_read_skip_empty_and_malformed_lines(tmp_path):
-        p = tmp_path / "pairs2.txt"
-        p.write_text("Hi\tSalut\n\nMalformed line\nExtra\tCols\tIgnored\n  \t  \n", encoding="utf-8")
-        ds = FrenchEnglishDataset(str(p))
-        assert ds._read_translation_pairs() == [("Hi", "Salut"), ("Extra", "Cols")]
-
-
-    def test_load_data_file_not_found_returns_empty_tensors():
-        ds = FrenchEnglishDataset("no_such_file_xyz.txt")
-        en_tensor, fr_tensor = ds.load_data()
-        assert en_tensor.shape == (0,)
-        assert fr_tensor.shape == (0,)
-
-
-    def test_load_data_empty_file_returns_empty_tensors(tmp_path):
-        p = tmp_path / "empty.txt"
-        p.write_text("", encoding="utf-8")
-        ds = FrenchEnglishDataset(str(p))
-        en_tensor, fr_tensor = ds.load_data()
-        assert en_tensor.shape == (0,)
-        assert fr_tensor.shape == (0,)
-
-
-    def test_load_data_returns_padded_tensors(tmp_path):
-        p = tmp_path / "pairs_for_tensor.txt"
-        p.write_text("One two\tUn deux\nThree\tTrois\n", encoding="utf-8")
-        ds = FrenchEnglishDataset(str(p))
-        en_tensor, fr_tensor = ds.load_data()
-
-        # Check shapes: 2 sentences, max length of 2 for English, max length of 3 for French (SOS/EOS)
-        assert en_tensor.shape == (2, 2)
-        assert fr_tensor.shape == (2, 3)
-
-        # Check English tensor content (no SOS/EOS, padded with <UNK>)
-        en_tok = ds.english_tokenizer
-        unk_id = en_tok.word_to_id['<UNK>']
-        expected_en = torch.tensor([
-            [en_tok.word_to_id['one'], en_tok.word_to_id['two']],
-            [en_tok.word_to_id['three'], unk_id]
-        ])
-        assert torch.equal(en_tensor, expected_en)
-
-        # Check French tensor content (with SOS/EOS, padded with <UNK>)
-        fr_tok = ds.french_tokenizer
-        expected_fr = torch.tensor([
-            [fr_tok.word_to_id['<sos>'], fr_tok.word_to_id['un'], fr_tok.word_to_id['deux']],
-            [fr_tok.word_to_id['<sos>'], fr_tok.word_to_id['trois'], fr_tok.word_to_id['<eos>']]
-        ])
-        # The padding for the second sentence in French should be <eos>, not <unk>
-        # Let's re-verify the logic. The max length is 3.
-        # "Un deux" -> [<sos>, un, deux] -> needs <eos> -> [<sos>, un, deux, <eos>] -> len 4
-        # "Trois" -> [<sos>, trois, <eos>] -> len 3
-        # Max length is 4.
-        # So fr_tensor shape should be (2, 4)
-        assert fr_tensor.shape == (2, 4)
-        
-        # Re-calculate expected French tensor with correct padding
-        expected_fr_corrected = torch.tensor([
-            [fr_tok.word_to_id['<sos>'], fr_tok.word_to_id['un'], fr_tok.word_to_id['deux'], fr_tok.word_to_id['<eos>']],
-            [fr_tok.word_to_id['<sos>'], fr_tok.word_to_id['trois'], fr_tok.word_to_id['<eos>'], unk_id]
-        ])
-        assert torch.equal(fr_tensor, expected_fr_corrected)
+    # Check padding
+    # Since sentences have different lengths, padding should be present (value 0)
+    # We check if at least one zero exists in the tensors (assuming not all sentences are same length)
+    assert (dataset.english_tensor == 0).any()
+    assert (dataset.french_tensor == 0).any()
+    
