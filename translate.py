@@ -30,7 +30,7 @@ model.load_state_dict(torch.load(config['model_output'], weights_only=True))
 model.eval()
 
 # Create encoder input.
-sentence = "I am swimming in a lake."
+sentence = input("Enter a sentence to translate: ")
 encoded_sentence = english_tokenizer.encode_sentence(sentence)
 encoder_input = encoded_sentence.unsqueeze(0) # Shape: 1 x EncSeqLength
 
