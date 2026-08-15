@@ -1,3 +1,4 @@
 weights/*
 data/*
 *__pycache__*
+baby_gemma/tinyshakespeare.txt
