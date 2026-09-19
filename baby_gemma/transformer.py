@@ -20,14 +20,14 @@ class Transformer(nn.Module, ABC):
     def tokens_to_words(self, seq):
         output = ""
         for i in seq[0]:
-            s = itos[i.item()]
+            s = self.itos[i.item()]
             output = output + " " + s 
         return output
 
     def context_to_tokens(self, context):
         tokens = []
         for w in context.split(' '):
-            idx = stoi[w]
+            idx = self.stoi[w]
             tokens.append(idx)
         return torch.tensor(tokens).unsqueeze(0)
 

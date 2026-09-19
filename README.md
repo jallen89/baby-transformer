@@ -5,5 +5,5 @@ Implementation of the original transformer in Attention Is All You Need paper
 
 | Model    | Positional Emb   | Attention Type     | Norm    |   Parameters |   Best Val Loss |   Final Val Loss |   Final PPL |   Steps/sec |
 |:---------|:-----------------|:-------------------|:--------|-------------:|----------------:|-----------------:|------------:|------------:|
-| Baseline | None             | Single-Head Causal | RMSNorm |    1,395,493 |          8.3053 |           8.3053 |      4045.3 |      285.54 |
+| Baseline | None             | Single-Head Causal | RMSNorm |    1,395,493 |          8.3407 |           8.3407 |        4191 |      282.03 |
 <!-- BENCHMARK_END -->
