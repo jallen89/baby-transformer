@@ -6,11 +6,10 @@ import torch
 def tokenizer():
     t = SimpleTokenizer()
     dataset = "A cat in the hat"
-    t.construct(dataset)
+    t.fit(dataset)
     return t
 
-
-def test_construction(tokenizer: SimpleTokenizer):
+def fit(tokenizer: SimpleTokenizer):
     assert (
         tokenizer.stoi['A'] == 0 
         and tokenizer.stoi['cat'] == 1
@@ -24,7 +23,18 @@ def test_encode(tokenizer: SimpleTokenizer):
     tokens = tokenizer.encode("cat hat")
     assert torch.equal(tokens, torch.tensor([1, 2], dtype=torch.float))
 
-
-def test_decode(tokenizer: SimpleTokenizer):
+def test_decode_single(tokenizer: SimpleTokenizer):
     decoded = tokenizer.decode(torch.tensor([1, 2], dtype=torch.float))
     assert decoded == "cat hat"
+
+def test_decode_batch(tokenizer: SimpleTokenizer):
+    decoded = tokenizer.decode(
+        torch.tensor(
+            [
+                [1, 2],
+                [3, 4],
+            ],
+            dtype=torch.float,
+        )
+    )
+    assert decoded == ["cat hat", "in the"]
