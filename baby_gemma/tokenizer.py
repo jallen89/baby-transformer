@@ -5,12 +5,17 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class SimpleTokenizer:
+class Tokenizer:
 
     def __init__(self):
         self.stoi = dict()
         self.itos = dict()
         self.unknown = '<UNK>'
+
+class SimpleTokenizer:
+
+    def __init__(self):
+        super().__init__()
         logger.debug('Initialized SimpleTokenizer')
 
     def fit(self, text: str):
@@ -56,3 +61,14 @@ class SimpleTokenizer:
 
     def __len__(self) -> int:
         return self.vocab_size
+
+
+class BPETokenizer:
+
+    def __init__(self):
+        super().__init__()
+        logger.debug('Initialized SimpleTokenizer')
+
+
+if __name__ == '__main__':
+    BPETokenizer()
