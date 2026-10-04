@@ -4,7 +4,7 @@ import torch.nn as nn
 
 class AttentionHead(nn.Module):
 
-    def __init__(self, d_model, max_seq_len=512, dropout=0.3):
+    def __init__(self, d_model, max_seq_len=512, dropout=0.1):
         super().__init__()
         self.d_model = d_model
         # in and out set o d_model since this is a single head. 
@@ -18,6 +18,8 @@ class AttentionHead(nn.Module):
         )
         self.register_buffer('mask', mask)
 
+        self.dropout = nn.Dropout(dropout)
+
     def forward(self, x):
         q = self.Q(x)
         k = self.K(x)
@@ -26,5 +28,8 @@ class AttentionHead(nn.Module):
         seq_len = x.shape[-2] #... x seq_len x dim_model
         qk = q @ k.transpose(-2, -1)
         qk_masked = qk.masked_fill(self.mask[:seq_len, :seq_len], -torch.inf)
-        o = torch.softmax(qk_masked / math.sqrt(self.d_model), dim=-1) @ v
+        scores = torch.softmax(qk_masked / math.sqrt(self.d_model), dim=-1)
+        # We use dropout here to prevent fixation on a single token.
+        scores = self.dropout(scores)
+        o = scores @ v
         return o

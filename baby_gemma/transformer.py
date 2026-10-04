@@ -89,7 +89,6 @@ class BabyTransformer(Transformer):
         self.prenorm_3 = RMSNorm(d_model)
         self.linear = torch.nn.Linear(d_model, vocab_size)
 
-
     def forward(self, x):
         emb = self.embedding(x)
         emb = self.emb_dropout(emb)
