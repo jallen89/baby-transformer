@@ -2,6 +2,12 @@ import torch
 import logging
 from collections import Counter
 
+import tokenizers
+from tokenizers.models import BPE
+from tokenizers.trainers import BpeTrainer
+from tokenizers.pre_tokenizers import ByteLevel
+from tokenizers.decoders import ByteLevel as ByteLevelDecoder
+
 
 logger = logging.getLogger(__name__)
 
@@ -16,12 +22,9 @@ class Tokenizer:
             self.unknown,
         ]
 
-    @property
-    def vocab_size(self) -> int:
-        return len(self.stoi)
-
     def __len__(self) -> int:
         return self.vocab_size
+    
 class SimpleTokenizer(Tokenizer):
 
     def __init__(self):
@@ -65,13 +68,62 @@ class SimpleTokenizer(Tokenizer):
 
         logger.error('Unsupported tensor dimension for decode: %d', token_tensor.dim())
 
+    @property
+    def vocab_size(self) -> int:
+        return len(self.stoi)
 
 
-class BPETokenizer(Tokenizer):
+class BPETokenizerHF(Tokenizer):
+    '''
+    Rust-based BPE Tokenizer from HF
+    '''
 
     def __init__(self, k_vocab):
         super().__init__()
-        logger.debug('Initialized SimpleTokenizer')
+        #logger('Iniital BPETokenizerHF')
+        self.k_vocab = k_vocab
+        self.vocab = set()
+        self.merges = dict()
+
+        self.tokenizer = tokenizers.Tokenizer(
+            BPE(unk_token=self.unknown)
+        )
+
+        self.tokenizer.pre_tokenizer = ByteLevel(add_prefix_space=False)
+        self.tokenizer.decoder = ByteLevelDecoder()
+
+        self.trainer = BpeTrainer(
+            vocab_size=self.k_vocab,
+            min_frequency=1,
+            special_tokens=self.special_tokens,
+            initial_alphabet=ByteLevel.alphabet()
+        )
+
+    def fit(self, text: str):
+        self.tokenizer.train_from_iterator(
+            [text],
+            trainer=self.trainer)
+
+    def encode(self, sentence):
+        e = self.tokenizer.encode(sentence)
+        return torch.tensor(e.ids, dtype=torch.long)
+
+    def decode(self, token_ids):
+        return self.tokenizer.decode(token_ids.tolist())
+
+    @property
+    def vocab_size(self) -> int:
+        return self.tokenizer.get_vocab_size()
+
+
+class BPETokenizer(Tokenizer):
+    '''
+    Python-Bsed BPE tokenizer, suffers from performance issues.
+    '''
+
+    def __init__(self, k_vocab):
+        super().__init__()
+        logger.debug('Initialized BPETokenizer')
         self.k_vocab = k_vocab 
         self.vocab = set()
         self.merges = dict()
@@ -194,3 +246,8 @@ class BPETokenizer(Tokenizer):
     def decode(self, tokens):
         text = ''.join(self.itos[token.item()] for token in tokens)
         return text.lstrip(' ')
+
+
+    @property
+    def vocab_size(self) -> int:
+        return len(self.stoi)
