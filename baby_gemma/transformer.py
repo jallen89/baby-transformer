@@ -6,9 +6,8 @@ from layers.attention import AttentionHead
 from layers.base import FFN
 
 class Transformer(nn.Module, ABC):
-    def __init__(self, itos: dict, stoi: dict, seq_len: int, vocab_size: int, d_model: int):
-        self.itos = itos
-        self.stoi = stoi 
+    def __init__(self, seq_len: int, vocab_size: int, d_model: int):
+
 
         super().__init__()
         self.seq_len = seq_len
@@ -18,28 +17,11 @@ class Transformer(nn.Module, ABC):
     @abstractmethod
     def forward(self, x):
         pass
-        
 
-    def tokens_to_words(self, seq):
-        output = ""
-        for i in seq[0]:
-            s = self.itos[i.item()]
-            output = output + " " + s 
-        return output
-
-    def context_to_tokens(self, context):
-        tokens = []
-        for w in context.split(' '):
-            idx = self.stoi[w]
-            tokens.append(idx)
-        return torch.tensor(tokens).unsqueeze(0)
-
-
-    def generate(self, max_seq_len=50, temperature=1.0, top_k=40, context="We are accounted poor"):
+    def generate(self, tokens, max_seq_len=50, temperature=1.0, top_k=40):
 
         device = next(self.parameters()).device
-        tokens = self.context_to_tokens(context).to(device)
-
+        tokens = tokens.to(device)
 
         for _ in range(max_seq_len):
             logits = self(tokens)
@@ -63,9 +45,7 @@ class Transformer(nn.Module, ABC):
 
             tokens = torch.cat([tokens, next_token], dim=1)
 
-
-        output = self.tokens_to_words(tokens)
-        return output
+        return tokens 
 
 
 class BabyTransformer(Transformer):
@@ -74,9 +54,9 @@ class BabyTransformer(Transformer):
     single-head scaled dot-product attention
     '''
 
-    def __init__(self, itos: dict, stoi: dict, seq_len: int, vocab_size: int, d_model: int,
+    def __init__(self, seq_len: int, vocab_size: int, d_model: int,
                  dropout: int =0.1):
-        super().__init__(itos, stoi, seq_len, vocab_size, d_model)
+        super().__init__(seq_len, vocab_size, d_model)
 
         self.embedding = nn.Embedding(vocab_size, d_model)
         self.emb_dropout = nn.Dropout(dropout)
