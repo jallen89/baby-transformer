@@ -1,3 +1,5 @@
+import torch
+from torch import nn 
 
 # x = torch.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]], dtype=torch.float)
 
@@ -76,7 +78,18 @@
 
 
 
+class AbsolutePositonalEncoder(nn.Module):
 
+    def __init__(self, seq_len, d_model):
+        super().__init__()
+        self.seq_len = seq_len
+        self.emb = nn.Embedding(seq_len, d_model)
+
+    def forward(self, x):
+        _,seq_len = x.shape
+        indices = torch.arange(0, seq_len, device=x.device)
+        o = self.emb(indices)
+        return o 
 
 
 
