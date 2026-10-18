@@ -109,7 +109,14 @@ class BPETokenizerHF(Tokenizer):
         return torch.tensor(e.ids, dtype=torch.long)
 
     def decode(self, token_ids):
-        return self.tokenizer.decode(token_ids.tolist())
+        if isinstance(token_ids, torch.Tensor):
+            token_ids = token_ids.tolist()
+        elif isinstance(token_ids, list):
+            pass
+        else:
+            raise TypeError('token_ids must be a list or torch.Tensor')
+
+        return self.tokenizer.decode(token_ids)
 
     @property
     def vocab_size(self) -> int:
