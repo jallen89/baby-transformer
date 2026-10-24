@@ -1,6 +1,7 @@
 import pytest
 from ..tokenizer import SimpleTokenizer
 from ..tokenizer import BPETokenizer
+from ..tokenizer import BPETokenizerHF
 import torch
 
 @pytest.fixture
@@ -75,6 +76,36 @@ def test_bpe_e2e():
     print(f"Encoded IDs: {encoded}")
     print(f"Decoded: '{decoded}'")
     assert decoded == test_sentence, f"Mismatch: '{decoded}' != '{test_sentence}'"
+
+
+def test_hf_bpe_token_cache_round_trip(tmp_path):
+    corpus = "the cat sat on the mat " * 20
+    cache_prefix = tmp_path / "corpus-bpe"
+
+    first_tokenizer = BPETokenizerHF(k_vocab=300)
+    first_tokens = first_tokenizer.fit_encode_cached(corpus, cache_prefix)
+
+    tokenizer_path = tmp_path / "corpus-bpe.tokenizer.json"
+    tokens_path = tmp_path / "corpus-bpe.tokens.pt"
+    assert tokenizer_path.exists()
+    assert tokens_path.exists()
+
+    second_tokenizer = BPETokenizerHF(k_vocab=300)
+    second_tokens = second_tokenizer.fit_encode_cached(corpus, cache_prefix)
+
+    assert torch.equal(first_tokens, second_tokens)
+    assert second_tokenizer.decode(second_tokens) == corpus
+
+
+def test_hf_bpe_token_cache_invalidates_for_new_text(tmp_path):
+    cache_prefix = tmp_path / "corpus-bpe"
+    tokenizer = BPETokenizerHF(k_vocab=300)
+    original = tokenizer.fit_encode_cached("alpha beta " * 20, cache_prefix)
+
+    tokenizer = BPETokenizerHF(k_vocab=300)
+    changed = tokenizer.fit_encode_cached("completely different text " * 20, cache_prefix)
+
+    assert not torch.equal(original, changed)
 
 # encoded = tokenizer.encode(sentence)
 # decoded = tokenizer.decode(encoded)

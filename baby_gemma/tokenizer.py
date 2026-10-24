@@ -1,6 +1,8 @@
 import torch
 import logging
+import hashlib
 from collections import Counter
+from pathlib import Path
 
 import tokenizers
 from tokenizers.models import BPE
@@ -103,6 +105,68 @@ class BPETokenizerHF(Tokenizer):
         self.tokenizer.train_from_iterator(
             [text],
             trainer=self.trainer)
+
+    def fit_encode_cached(self, text: str, cache_prefix) -> torch.Tensor:
+        """Fit the tokenizer and encode ``text``, reusing a disk cache.
+
+        Two files are written for a cache prefix::
+
+            <cache_prefix>.tokenizer.json
+            <cache_prefix>.tokens.pt
+
+        The cache is invalidated when either the input text or requested
+        vocabulary size changes. Loading always happens on the CPU so the
+        full corpus is never placed in GPU memory.
+        """
+        cache_prefix = Path(cache_prefix)
+        cache_prefix.parent.mkdir(parents=True, exist_ok=True)
+        tokenizer_path = Path(f"{cache_prefix}.tokenizer.json")
+        tokens_path = Path(f"{cache_prefix}.tokens.pt")
+
+        metadata = {
+            "format_version": 1,
+            "text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+            "k_vocab": self.k_vocab,
+        }
+
+        if tokenizer_path.exists() and tokens_path.exists():
+            try:
+                cached = torch.load(
+                    tokens_path,
+                    map_location="cpu",
+                    weights_only=True,
+                )
+                if cached.get("metadata") == metadata:
+                    self.tokenizer = tokenizers.Tokenizer.from_file(
+                        str(tokenizer_path)
+                    )
+                    tokens = cached["tokens"]
+                    if not isinstance(tokens, torch.Tensor):
+                        raise TypeError("cached tokens are not a tensor")
+                    logger.info(
+                        "Loaded %d cached tokens from %s",
+                        tokens.numel(),
+                        tokens_path,
+                    )
+                    return tokens.to(dtype=torch.long)
+                logger.info("Token cache is stale; rebuilding %s", tokens_path)
+            except (KeyError, TypeError, RuntimeError, ValueError) as error:
+                logger.warning(
+                    "Could not load token cache %s (%s); rebuilding it",
+                    tokens_path,
+                    error,
+                )
+
+        logger.info("Training BPE tokenizer and encoding corpus")
+        self.fit(text)
+        tokens = self.encode(text).cpu()
+        self.tokenizer.save(str(tokenizer_path))
+        torch.save(
+            {"metadata": metadata, "tokens": tokens},
+            tokens_path,
+        )
+        logger.info("Saved %d tokens to %s", tokens.numel(), tokens_path)
+        return tokens
 
     def encode(self, sentence):
         e = self.tokenizer.encode(sentence)
