@@ -92,5 +92,26 @@ class AbsolutePositonalEncoder(nn.Module):
         return o 
 
 
+class PositionalEncoding(nn.Module):
+
+    def __init__(self, seq_len, d_model):
+        super().__init__()
+
+        pe = torch.zeros(seq_len, d_model)
+        pos = torch.arange(0, seq_len, dtype=torch.float).unsqueeze(1)
+        exponent = torch.arange(0, d_model, 2, dtype=torch.float) / d_model
+        div_term = torch.pow(10000, exponent)
+
+        result = pos/div_term
+        pe[:, 0::2] = torch.sin(result)
+        pe[:, 1::2] = torch.cos(result)
+        
+        self.register_buffer('pe', pe.unsqueeze(0))
+
+
+    def forward(self, x):
+        o = x + self.pe[:,:x.shape[1],:]
+        return o
+
 
 
